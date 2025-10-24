@@ -1,0 +1,14 @@
+name: template
+version: '1.0-SNAPSHOT'
+main: sh.harold.template.Template
+bootstrapper: sh.harold.template.TemplateBootstrapper
+api-version: '1.21'
+dependencies:
+  bootstrap:
+    Fulcrum:
+      load: BEFORE
+      required: true
+  server:
+    Fulcrum:
+      load: BEFORE
+      required: true
