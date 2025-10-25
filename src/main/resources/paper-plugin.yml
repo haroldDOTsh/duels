@@ -1,7 +1,7 @@
-name: template
+name: duels
 version: '1.0-SNAPSHOT'
-main: sh.harold.template.Template
-bootstrapper: sh.harold.template.TemplateBootstrapper
+main: sh.harold.duels.DuelsPlugin
+bootstrapper: sh.harold.duels.DuelsBootstrapper
 api-version: '1.21'
 dependencies:
   bootstrap:

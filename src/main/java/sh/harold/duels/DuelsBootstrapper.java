@@ -1,4 +1,4 @@
-package sh.harold.template;
+package sh.harold.duels;
 
 import io.papermc.paper.plugin.bootstrap.BootstrapContext;
 import io.papermc.paper.plugin.bootstrap.PluginBootstrap;
@@ -7,22 +7,25 @@ import org.bukkit.plugin.java.JavaPlugin;
 import sh.harold.fulcrum.api.module.BootstrapContextHolder;
 import sh.harold.fulcrum.api.module.FulcrumEnvironment;
 
-public final class TemplateBootstrapper implements PluginBootstrap {
+/**
+ * Minimal bootstrapper that defers to Fulcrum's module toggles before Paper instantiates the plugin.
+ */
+public final class DuelsBootstrapper implements PluginBootstrap {
     private boolean shouldLoad;
 
     @Override
     public void bootstrap(BootstrapContext context) {
         try {
-            BootstrapContextHolder.setContext(Template.MODULE_ID); // No manual string needed—keeps module ID in one place
+            BootstrapContextHolder.setContext(DuelsPlugin.MODULE_ID);
 
             if (!FulcrumEnvironment.isThisModuleEnabled()) {
-                context.getLogger().info("Template disabled - will not load");
+                context.getLogger().info("Duels module disabled - skipping load");
                 shouldLoad = false;
                 return;
             }
 
             shouldLoad = true;
-            context.getLogger().info("Template enabled - will load");
+            context.getLogger().info("Duels module enabled");
         } finally {
             BootstrapContextHolder.clearContext();
         }
@@ -31,7 +34,7 @@ public final class TemplateBootstrapper implements PluginBootstrap {
     @Override
     public JavaPlugin createPlugin(PluginProviderContext context) {
         if (!shouldLoad) {
-            throw new IllegalStateException("Aborting load: Template module disabled via Fulcrum configuration.");
+            throw new IllegalStateException("Aborting load: Duels module disabled via Fulcrum configuration.");
         }
         return PluginBootstrap.super.createPlugin(context);
     }
