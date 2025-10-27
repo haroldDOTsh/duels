@@ -26,6 +26,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.util.Vector;
+import sh.harold.duels.MatchOutcomeTitles;
 import sh.harold.fulcrum.api.world.poi.POIRegistry;
 import sh.harold.fulcrum.fundamentals.actionflag.ActionFlagContexts;
 import sh.harold.fulcrum.fundamentals.actionflag.ActionFlagService;
@@ -311,6 +312,7 @@ final class SumoRoundHandler implements InGameHandler {
 
     private void announceWinner(StateContext context, SumoMatchContext matchContext, MatchTeam winner) {
         matchContext.markResultDeclared();
+        MatchOutcomeTitles.showOutcome(context, winner);
         String teamName = LEGACY_SERIALIZER.serialize(winner.getDisplayName());
         context.broadcast(ChatColor.GREEN + matchContext.variant().displayName()
                 + ChatColor.GRAY + " winner: " + ChatColor.AQUA + teamName);
@@ -319,6 +321,7 @@ final class SumoRoundHandler implements InGameHandler {
 
     private void announceTie(StateContext context, SumoMatchContext matchContext) {
         matchContext.markResultDeclared();
+        MatchOutcomeTitles.showTie(context);
         context.broadcast(ChatColor.YELLOW + matchContext.variant().displayName()
                 + ChatColor.GRAY + " tie! Both teams left the platform.");
         concludeMatch(context);
