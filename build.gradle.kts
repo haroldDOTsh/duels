@@ -15,7 +15,7 @@ plugins {
 group = "sh.harold"
 version = "1.0-SNAPSHOT"
 
-val fulcrumVersion = providers.gradleProperty("fulcrumVersion").orElse("3.3.1").get()
+val fulcrumVersion = providers.gradleProperty("fulcrumVersion").orElse("3.4.6").get()
 
 repositories {
     mavenCentral()
