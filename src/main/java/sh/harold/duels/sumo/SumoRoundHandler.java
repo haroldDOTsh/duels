@@ -27,6 +27,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.util.Vector;
 import sh.harold.duels.MatchOutcomeTitles;
+import sh.harold.duels.scoreboard.DuelsScoreboard;
+import sh.harold.duels.scoreboard.DuelsScoreboardLayout;
 import sh.harold.fulcrum.api.world.poi.POIRegistry;
 import sh.harold.fulcrum.fundamentals.actionflag.ActionFlagContexts;
 import sh.harold.fulcrum.fundamentals.actionflag.ActionFlagService;
@@ -86,6 +88,11 @@ final class SumoRoundHandler implements InGameHandler {
         context.applyFlagContext(actionFlagContext);
         preparePlayers(context, teams, teamSpawns);
 
+        DuelsScoreboardLayout scoreboardLayout = DuelsScoreboardLayout.builder("Sumo", matchContext.variant().displayName())
+                .matchDuration(SumoRules.MATCH_DURATION)
+                .build();
+        DuelsScoreboard.apply(context, scoreboardLayout);
+
         context.broadcast(ChatColor.GOLD + "Sumo " + variant.displayName()
                 + ChatColor.AQUA + " - first team to fall loses!");
     }
@@ -96,6 +103,17 @@ final class SumoRoundHandler implements InGameHandler {
                         SumoAttributes.MATCH_CONTEXT, SumoMatchContext.class)
                 .orElse(null);
         if (matchContext == null || matchContext.resultDeclared()) {
+            return;
+        }
+
+        boolean timedOut = DuelsScoreboard.getClock(context)
+                .map(clock -> !clock.isInfinite() && clock.isExpired())
+                .orElse(false);
+        if (timedOut) {
+            if (!matchContext.tieLatched()) {
+                matchContext.latchTie();
+            }
+            resolveOutcome(context, matchContext);
             return;
         }
 
@@ -113,6 +131,7 @@ final class SumoRoundHandler implements InGameHandler {
     @Override
     public void onMatchEnd(StateContext context) {
         clearHealthGuards(context);
+        DuelsScoreboard.teardown(context);
         context.removeAttribute(SumoAttributes.MATCH_CONTEXT);
     }
 
@@ -332,6 +351,7 @@ final class SumoRoundHandler implements InGameHandler {
         context.setAttribute(MinigameAttributes.MATCH_COMPLETE, Boolean.TRUE);
         context.markMatchComplete();
         context.requestTransition(MinigameBlueprint.STATE_END_GAME);
+        DuelsScoreboard.teardown(context);
     }
 
     private String resolveActiveFlagContext() {
