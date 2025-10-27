@@ -67,7 +67,7 @@ public final class MatchOutcomeTitles {
     }
 
     private static TextColor resolveNameColor(Player player) {
-        Team team = player.getScoreboard().getPlayerTeam(player.getName());
+        Team team = player.getScoreboard().getPlayerTeam(player);
         if (team != null && team.color() != null) {
             return team.color();
         }
