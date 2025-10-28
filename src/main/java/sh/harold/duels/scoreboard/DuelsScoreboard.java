@@ -4,8 +4,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
@@ -15,12 +16,15 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 import org.bukkit.scheduler.BukkitTask;
+import sh.harold.fulcrum.api.lifecycle.ServerIdentifier;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardBuilder;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
 import sh.harold.fulcrum.api.message.scoreboard.module.DynamicContentProvider;
 import sh.harold.fulcrum.api.message.scoreboard.module.ScoreboardModule;
 import sh.harold.fulcrum.api.message.scoreboard.module.StaticContentProvider;
 import sh.harold.fulcrum.api.message.scoreboard.registry.ScoreboardDefinition;
+import sh.harold.fulcrum.api.rank.Rank;
+import sh.harold.fulcrum.api.rank.RankUtils;
 import sh.harold.fulcrum.lifecycle.ServiceLocatorImpl;
 import sh.harold.fulcrum.minigame.match.RosterManager;
 import sh.harold.fulcrum.minigame.match.RosterManager.PlayerState;
@@ -50,11 +54,17 @@ public final class DuelsScoreboard {
         }
 
         String scoreboardId = buildScoreboardId(context.getMatchId());
+        if (service.isScoreboardRegistered(scoreboardId)) {
+            service.unregisterScoreboard(scoreboardId);
+        }
         DuelsMatchClock clock = layout.matchDuration()
                 .map(DuelsMatchClock::start)
                 .orElseGet(DuelsMatchClock::infinite);
 
-        ScoreboardBuilder builder = new ScoreboardBuilder(scoreboardId).title(layout.title());
+        String title = layout.title()
+                .filter(value -> !value.isBlank())
+                .orElseGet(() -> "&e&l" + layout.familyDisplayName().toUpperCase(Locale.ROOT));
+        ScoreboardBuilder builder = new ScoreboardBuilder(scoreboardId).title(title);
         String headerLabel = layout.headerLabel()
                 .filter(label -> !label.isBlank())
                 .orElseGet(() -> resolveHeaderLabel(context));
@@ -76,14 +86,13 @@ public final class DuelsScoreboard {
         builder.module(new MetaModule(layout));
 
         ScoreboardDefinition definition = builder.build();
-        if (!service.isScoreboardRegistered(scoreboardId)) {
-            service.registerScoreboard(scoreboardId, definition);
-        }
+        service.registerScoreboard(scoreboardId, definition);
 
         BukkitTask refreshTask = context.scheduleRepeatingTask(() -> refresh(context),
                 REFRESH_PERIOD_TICKS, REFRESH_PERIOD_TICKS);
         DuelsScoreboardState state = new DuelsScoreboardState(scoreboardId, clock, layout, refreshTask);
         context.setAttribute(SCOREBOARD_ATTRIBUTE, state);
+        state.clock().setFrozen(context.isStateMachineFrozen());
 
         context.forEachPlayer(player -> {
             UUID playerId = player.getUniqueId();
@@ -118,9 +127,15 @@ public final class DuelsScoreboard {
     }
 
     public static void refresh(StateContext context) {
-        if (context == null || resolveState(context).isEmpty()) {
+        if (context == null) {
             return;
         }
+        Optional<DuelsScoreboardState> stateOpt = resolveState(context);
+        if (stateOpt.isEmpty()) {
+            return;
+        }
+        DuelsScoreboardState state = stateOpt.get();
+        state.clock().setFrozen(context.isStateMachineFrozen());
         ScoreboardService service = resolveService();
         if (service == null) {
             return;
@@ -181,29 +196,19 @@ public final class DuelsScoreboard {
 
     private static String resolveHeaderLabel(StateContext context) {
         Map<String, String> metadata = readSlotMetadata(context);
-        String serverId = firstNonBlank(
-                metadata.get("serverId"),
-                metadata.get("server"),
-                metadata.get("serverName"),
-                metadata.get("facilityId"));
         String slotId = context.getAttributeOptional(MinigameAttributes.SLOT_ID, String.class)
                 .map(String::trim)
                 .filter(id -> !id.isEmpty())
                 .orElseGet(() -> firstNonBlank(
                         metadata.get("slotId"),
                         metadata.get("slot"),
-                metadata.get("slotName")));
+                        metadata.get("slotName")));
 
         if (slotId.isEmpty()) {
             throw new IllegalStateException("Missing slot identifier for duels scoreboard header");
         }
 
-        StringBuilder label = new StringBuilder();
-        if (!serverId.isEmpty()) {
-            label.append("&7").append(serverId).append(" ");
-        }
-        label.append("&8").append(slotId);
-        return label.toString();
+        return "&8" + slotId;
     }
 
     private static Map<String, String> readSlotMetadata(StateContext context) {
@@ -347,9 +352,10 @@ public final class DuelsScoreboard {
         }
 
         private String resolveColoredName(Player player) {
-            NamedTextColor color = context.team(player.getUniqueId())
-                    .map(MatchTeam::getColor)
-                    .orElse(NamedTextColor.WHITE);
+            Rank rank = RankUtils.getEffectiveRank(player);
+            NamedTextColor color = rank != null && rank.getNameColor() != null
+                    ? rank.getNameColor()
+                    : NamedTextColor.WHITE;
             Component component = Component.text(player.getName(), color);
             String legacy = LEGACY_SERIALIZER.serialize(component);
             return legacy.replace('\u00A7', '&');
@@ -394,15 +400,10 @@ public final class DuelsScoreboard {
         }
 
         private List<String> buildLines(DuelsScoreboardLayout layout) {
-            StringBuilder modeLine = new StringBuilder("&fMode: &e")
-                    .append(layout.familyDisplayName());
-            if (!layout.variantDisplayName().isBlank()) {
-                modeLine.append(" &7").append(layout.variantDisplayName());
-            }
             return List.of(
-                    modeLine.toString(),
-                    "&fDaily Streak: &7--",
-                    "&fBest Daily Streak: &7--"
+                    "&fMode: &a" + layout.modeLabel(),
+                    "&fDaily Streak: &a--",
+                    "&fBest Daily Streak: &a--"
             );
         }
     }

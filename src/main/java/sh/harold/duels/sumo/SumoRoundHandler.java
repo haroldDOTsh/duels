@@ -88,7 +88,7 @@ final class SumoRoundHandler implements InGameHandler {
         context.applyFlagContext(actionFlagContext);
         preparePlayers(context, teams, teamSpawns);
 
-        DuelsScoreboardLayout scoreboardLayout = DuelsScoreboardLayout.builder("Sumo", matchContext.variant().displayName())
+        DuelsScoreboardLayout scoreboardLayout = DuelsScoreboardLayout.builder("Sumo", matchContext.variant().scoreboardLabel())
                 .matchDuration(SumoRules.MATCH_DURATION)
                 .build();
         DuelsScoreboard.apply(context, scoreboardLayout);

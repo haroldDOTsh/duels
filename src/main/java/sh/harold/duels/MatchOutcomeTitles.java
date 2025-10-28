@@ -11,7 +11,8 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.title.Title;
 import org.bukkit.entity.Player;
-import org.bukkit.scoreboard.Team;
+import sh.harold.fulcrum.api.rank.Rank;
+import sh.harold.fulcrum.api.rank.RankUtils;
 import sh.harold.fulcrum.minigame.state.context.StateContext;
 import sh.harold.fulcrum.minigame.team.MatchTeam;
 
@@ -67,21 +68,10 @@ public final class MatchOutcomeTitles {
     }
 
     private static TextColor resolveNameColor(Player player) {
-        Team team = player.getScoreboard().getPlayerTeam(player);
-        if (team != null && team.color() != null) {
-            return team.color();
+        Rank rank = RankUtils.getEffectiveRank(player);
+        if (rank != null && rank.getNameColor() != null) {
+            return rank.getNameColor();
         }
-
-        Component listName = player.playerListName();
-        if (listName != null && listName.color() != null) {
-            return listName.color();
-        }
-
-        Component displayName = player.displayName();
-        if (displayName != null && displayName.color() != null) {
-            return displayName.color();
-        }
-
         return NamedTextColor.WHITE;
     }
 

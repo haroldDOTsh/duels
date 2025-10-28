@@ -8,14 +8,18 @@ import java.util.Optional;
  * Simple wall-clock tracker for in-match countdowns.
  */
 public final class DuelsMatchClock {
-    private final long startTimeMillis;
     private final Duration totalDuration;
     private final boolean infinite;
+    private Duration accrued;
+    private long lastUpdateMillis;
+    private boolean frozen;
 
     private DuelsMatchClock(Duration totalDuration, boolean infinite) {
-        this.startTimeMillis = System.currentTimeMillis();
         this.totalDuration = totalDuration;
         this.infinite = infinite;
+        this.accrued = Duration.ZERO;
+        this.lastUpdateMillis = System.currentTimeMillis();
+        this.frozen = false;
     }
 
     public static DuelsMatchClock start(Duration duration) {
@@ -39,20 +43,38 @@ public final class DuelsMatchClock {
     }
 
     public Duration elapsed() {
-        long deltaMillis = Math.max(0L, System.currentTimeMillis() - startTimeMillis);
-        return Duration.ofMillis(deltaMillis);
+        updateAccrued();
+        return accrued;
     }
 
     public Duration remaining() {
         if (infinite) {
             return Duration.ZERO;
         }
-        Duration remaining = totalDuration.minus(elapsed());
+        updateAccrued();
+        Duration remaining = totalDuration.minus(accrued);
         return remaining.isNegative() ? Duration.ZERO : remaining;
     }
 
     public boolean isExpired() {
-        return !infinite && remaining().isZero();
+        if (infinite) {
+            return false;
+        }
+        updateAccrued();
+        return accrued.compareTo(totalDuration) >= 0;
+    }
+
+    public void setFrozen(boolean frozen) {
+        if (this.frozen == frozen) {
+            return;
+        }
+        updateAccrued();
+        this.frozen = frozen;
+        this.lastUpdateMillis = System.currentTimeMillis();
+    }
+
+    public boolean isFrozen() {
+        return frozen;
     }
 
     public String formatRemaining() {
@@ -68,5 +90,23 @@ public final class DuelsMatchClock {
             return String.format("%d:%02d:%02d", hours, minutes, seconds);
         }
         return String.format("%02d:%02d", minutes, seconds);
+    }
+
+    private void updateAccrued() {
+        long now = System.currentTimeMillis();
+        if (infinite) {
+            lastUpdateMillis = now;
+            return;
+        }
+        if (!frozen) {
+            long deltaMillis = Math.max(0L, now - lastUpdateMillis);
+            if (deltaMillis > 0L) {
+                accrued = accrued.plusMillis(deltaMillis);
+                if (accrued.compareTo(totalDuration) > 0) {
+                    accrued = totalDuration;
+                }
+            }
+        }
+        lastUpdateMillis = now;
     }
 }

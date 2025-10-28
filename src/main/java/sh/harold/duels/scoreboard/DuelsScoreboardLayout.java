@@ -10,25 +10,29 @@ import sh.harold.fulcrum.api.message.scoreboard.module.ScoreboardModule;
 import sh.harold.fulcrum.minigame.state.context.StateContext;
 
 public final class DuelsScoreboardLayout {
-    private final String title;
+    private final Optional<String> title;
     private final Optional<String> headerLabel;
     private final String familyDisplayName;
     private final String variantDisplayName;
+    private final String modeLabel;
     private final Optional<Duration> matchDuration;
     private final Optional<ScoreboardModuleFactory> secondModuleFactory;
     private final List<ScoreboardModuleFactory> betweenModuleFactories;
 
     private DuelsScoreboardLayout(Builder builder) {
-        this.title = builder.title;
+        this.title = Optional.ofNullable(builder.title);
         this.headerLabel = builder.headerLabel;
         this.familyDisplayName = builder.familyDisplayName;
         this.variantDisplayName = builder.variantDisplayName;
+        this.modeLabel = builder.modeLabel != null
+                ? builder.modeLabel
+                : String.format("%s %s", builder.familyDisplayName, builder.variantDisplayName).trim();
         this.matchDuration = builder.matchDuration;
         this.secondModuleFactory = builder.secondModuleFactory;
         this.betweenModuleFactories = Collections.unmodifiableList(new ArrayList<>(builder.betweenModuleFactories));
     }
 
-    public String title() {
+    public Optional<String> title() {
         return title;
     }
 
@@ -42,6 +46,10 @@ public final class DuelsScoreboardLayout {
 
     public String variantDisplayName() {
         return variantDisplayName;
+    }
+
+    public String modeLabel() {
+        return modeLabel;
     }
 
     public Optional<Duration> matchDuration() {
@@ -66,10 +74,11 @@ public final class DuelsScoreboardLayout {
     }
 
     public static final class Builder {
-        private String title = "&eDUELS";
+        private String title;
         private Optional<String> headerLabel = Optional.empty();
         private final String familyDisplayName;
         private final String variantDisplayName;
+        private String modeLabel;
         private Optional<Duration> matchDuration = Optional.empty();
         private Optional<ScoreboardModuleFactory> secondModuleFactory = Optional.empty();
         private final List<ScoreboardModuleFactory> betweenModuleFactories = new ArrayList<>();
@@ -90,6 +99,11 @@ public final class DuelsScoreboardLayout {
             } else {
                 this.headerLabel = Optional.of(headerLabel);
             }
+            return this;
+        }
+
+        public Builder modeLabel(String modeLabel) {
+            this.modeLabel = Objects.requireNonNull(modeLabel, "modeLabel");
             return this;
         }
 
