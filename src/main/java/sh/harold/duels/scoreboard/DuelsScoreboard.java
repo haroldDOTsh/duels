@@ -39,7 +39,7 @@ public final class DuelsScoreboard {
     private static final long REFRESH_PERIOD_TICKS = 10L;
     private static final LegacyComponentSerializer LEGACY_SERIALIZER =
             LegacyComponentSerializer.legacySection();
-    private static final char[] DIRECTION_ARROWS = {'↑', '↗', '→', '↘', '↓', '↙', '←', '↖'};
+    private static final char[] DIRECTION_ARROWS = {'⬆', '⬈', '➡', '⬊', '⬇', '⬋', '⬅', '⬉'};
 
     private DuelsScoreboard() {
     }
@@ -366,7 +366,7 @@ public final class DuelsScoreboard {
             double health = Math.max(0D, Math.min(player.getHealth(), maxHealth));
             int hearts = (int) Math.ceil(health / 2D);
             hearts = Math.max(0, hearts);
-            return "&c" + hearts + "❤";
+            return "&a" + hearts + "&c❤";
         }
 
         private String directionArrow(Location source, Location target) {
