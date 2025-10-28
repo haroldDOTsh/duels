@@ -373,6 +373,8 @@ final class SumoRoundHandler implements InGameHandler {
             EnumSet<ActionFlag> flags = EnumSet.allOf(ActionFlag.class);
             flags.remove(ActionFlag.INVISIBLE_PACKET);
             flags.remove(ActionFlag.INVISIBLE_POTION);
+            flags.remove(ActionFlag.BLOCK_BREAK);
+            flags.remove(ActionFlag.BLOCK_PLACE);
             FlagBundle bundle = FlagBundle.of(SUMO_ACTIVE_FLAG_CONTEXT, flags)
                     .withGamemode(GameMode.SURVIVAL);
             service.registerContext(SUMO_ACTIVE_FLAG_CONTEXT, bundle);
