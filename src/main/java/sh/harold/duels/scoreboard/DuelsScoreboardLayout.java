@@ -11,7 +11,7 @@ import sh.harold.fulcrum.minigame.state.context.StateContext;
 
 public final class DuelsScoreboardLayout {
     private final String title;
-    private final String headerLabel;
+    private final Optional<String> headerLabel;
     private final String familyDisplayName;
     private final String variantDisplayName;
     private final Optional<Duration> matchDuration;
@@ -32,7 +32,7 @@ public final class DuelsScoreboardLayout {
         return title;
     }
 
-    public String headerLabel() {
+    public Optional<String> headerLabel() {
         return headerLabel;
     }
 
@@ -66,8 +66,8 @@ public final class DuelsScoreboardLayout {
     }
 
     public static final class Builder {
-        private String title = "&6Duels";
-        private String headerLabel;
+        private String title = "&eDUELS";
+        private Optional<String> headerLabel = Optional.empty();
         private final String familyDisplayName;
         private final String variantDisplayName;
         private Optional<Duration> matchDuration = Optional.empty();
@@ -85,7 +85,11 @@ public final class DuelsScoreboardLayout {
         }
 
         public Builder headerLabel(String headerLabel) {
-            this.headerLabel = headerLabel;
+            if (headerLabel == null || headerLabel.isBlank()) {
+                this.headerLabel = Optional.empty();
+            } else {
+                this.headerLabel = Optional.of(headerLabel);
+            }
             return this;
         }
 

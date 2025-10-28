@@ -2,10 +2,11 @@ package sh.harold.duels.scoreboard;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -13,6 +14,7 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
+import org.bukkit.scheduler.BukkitTask;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardBuilder;
 import sh.harold.fulcrum.api.message.scoreboard.ScoreboardService;
 import sh.harold.fulcrum.api.message.scoreboard.module.DynamicContentProvider;
@@ -24,11 +26,13 @@ import sh.harold.fulcrum.minigame.match.RosterManager;
 import sh.harold.fulcrum.minigame.match.RosterManager.PlayerState;
 import sh.harold.fulcrum.minigame.state.context.StateContext;
 import sh.harold.fulcrum.minigame.team.MatchTeam;
+import sh.harold.fulcrum.minigame.MinigameAttributes;
 
 public final class DuelsScoreboard {
     private static final String SCOREBOARD_ATTRIBUTE = "duels.inGame.scoreboard";
     private static final long FAST_REFRESH_INTERVAL_MILLIS = 500L;
     private static final long STANDARD_REFRESH_INTERVAL_MILLIS = Duration.ofSeconds(1L).toMillis();
+    private static final long REFRESH_PERIOD_TICKS = 10L;
     private static final LegacyComponentSerializer LEGACY_SERIALIZER =
             LegacyComponentSerializer.legacySection();
     private static final char[] DIRECTION_ARROWS = {'↑', '↗', '→', '↘', '↓', '↙', '←', '↖'};
@@ -51,8 +55,11 @@ public final class DuelsScoreboard {
                 .orElseGet(DuelsMatchClock::infinite);
 
         ScoreboardBuilder builder = new ScoreboardBuilder(scoreboardId).title(layout.title());
-        if (layout.headerLabel() != null && !layout.headerLabel().isBlank()) {
-            builder.headerLabel(layout.headerLabel());
+        String headerLabel = layout.headerLabel()
+                .filter(label -> !label.isBlank())
+                .orElseGet(() -> resolveHeaderLabel(context));
+        if (!headerLabel.isBlank()) {
+            builder.headerLabel(headerLabel);
         }
 
         builder.module(new TimeLeftModule(clock));
@@ -73,9 +80,17 @@ public final class DuelsScoreboard {
             service.registerScoreboard(scoreboardId, definition);
         }
 
-        DuelsScoreboardState state = new DuelsScoreboardState(scoreboardId, clock, layout);
+        BukkitTask refreshTask = context.scheduleRepeatingTask(() -> refresh(context),
+                REFRESH_PERIOD_TICKS, REFRESH_PERIOD_TICKS);
+        DuelsScoreboardState state = new DuelsScoreboardState(scoreboardId, clock, layout, refreshTask);
         context.setAttribute(SCOREBOARD_ATTRIBUTE, state);
-        context.forEachPlayer(player -> service.showScoreboard(player.getUniqueId(), scoreboardId));
+
+        context.forEachPlayer(player -> {
+            UUID playerId = player.getUniqueId();
+            service.showScoreboard(playerId, scoreboardId);
+            service.refreshPlayerScoreboard(playerId);
+        });
+        refresh(context);
     }
 
     public static void showToPlayer(StateContext context, UUID playerId) {
@@ -88,6 +103,7 @@ public final class DuelsScoreboard {
             return;
         }
         service.showScoreboard(playerId, state.get().scoreboardId());
+        service.refreshPlayerScoreboard(playerId);
     }
 
     public static void hideFromPlayer(StateContext context, UUID playerId) {
@@ -102,14 +118,14 @@ public final class DuelsScoreboard {
     }
 
     public static void refresh(StateContext context) {
-        ScoreboardService service = resolveService();
-        if (context == null || service == null) {
+        if (context == null || resolveState(context).isEmpty()) {
             return;
         }
-        Set<UUID> players = context.getActivePlayers();
-        for (UUID playerId : players) {
-            service.refreshPlayerScoreboard(playerId);
+        ScoreboardService service = resolveService();
+        if (service == null) {
+            return;
         }
+        context.forEachPlayer(player -> service.refreshPlayerScoreboard(player.getUniqueId()));
     }
 
     public static void teardown(StateContext context) {
@@ -122,10 +138,9 @@ public final class DuelsScoreboard {
             return;
         }
         DuelsScoreboardState scoreboardState = state.get();
+        cancelRefreshTask(scoreboardState);
         if (service != null) {
-            for (UUID playerId : context.getActivePlayers()) {
-                service.hideScoreboard(playerId);
-            }
+            context.forEachPlayer(player -> service.hideScoreboard(player.getUniqueId()));
             if (service.isScoreboardRegistered(scoreboardState.scoreboardId())) {
                 service.unregisterScoreboard(scoreboardState.scoreboardId());
             }
@@ -146,6 +161,12 @@ public final class DuelsScoreboard {
                 : context.getAttributeOptional(SCOREBOARD_ATTRIBUTE, DuelsScoreboardState.class);
     }
 
+    private static void cancelRefreshTask(DuelsScoreboardState state) {
+        if (state.refreshTask() != null) {
+            state.refreshTask().cancel();
+        }
+    }
+
     private static ScoreboardService resolveService() {
         ServiceLocatorImpl locator = ServiceLocatorImpl.getInstance();
         if (locator == null) {
@@ -158,8 +179,69 @@ public final class DuelsScoreboard {
         return "duels:match/" + matchId;
     }
 
+    private static String resolveHeaderLabel(StateContext context) {
+        Map<String, String> metadata = readSlotMetadata(context);
+        String serverId = firstNonBlank(
+                metadata.get("serverId"),
+                metadata.get("server"),
+                metadata.get("serverName"),
+                metadata.get("facilityId"));
+        String slotId = context.getAttributeOptional(MinigameAttributes.SLOT_ID, String.class)
+                .map(String::trim)
+                .filter(id -> !id.isEmpty())
+                .orElseGet(() -> firstNonBlank(
+                        metadata.get("slotId"),
+                        metadata.get("slot"),
+                metadata.get("slotName")));
+
+        if (slotId.isEmpty()) {
+            throw new IllegalStateException("Missing slot identifier for duels scoreboard header");
+        }
+
+        StringBuilder label = new StringBuilder();
+        if (!serverId.isEmpty()) {
+            label.append("&7").append(serverId).append(" ");
+        }
+        label.append("&8").append(slotId);
+        return label.toString();
+    }
+
+    private static Map<String, String> readSlotMetadata(StateContext context) {
+        return context.getAttributeOptional(MinigameAttributes.SLOT_METADATA, Map.class)
+                .map(raw -> {
+                    Map<String, String> metadata = new HashMap<>();
+                    ((Map<?, ?>) raw).forEach((key, value) -> {
+                        if (key == null || value == null) {
+                            return;
+                        }
+                        String stringKey = String.valueOf(key);
+                        String stringValue = String.valueOf(value).trim();
+                        if (!stringKey.isBlank() && !stringValue.isBlank()) {
+                            metadata.put(stringKey, stringValue);
+                        }
+                    });
+                    return metadata;
+                })
+                .orElseGet(Map::of);
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null) {
+                String trimmed = value.trim();
+                if (!trimmed.isEmpty()) {
+                    return trimmed;
+                }
+            }
+        }
+        return "";
+    }
+
     private record DuelsScoreboardState(String scoreboardId, DuelsMatchClock clock,
-                                        DuelsScoreboardLayout layout) {
+                                        DuelsScoreboardLayout layout, BukkitTask refreshTask) {
     }
 
     private static final class TimeLeftModule implements ScoreboardModule {
@@ -182,9 +264,8 @@ public final class DuelsScoreboard {
         }
 
         private List<String> buildLines(UUID ignored) {
-            List<String> lines = new ArrayList<>(2);
-            lines.add("&f&lTime Left: &a" + clock.formatRemaining());
-            lines.add("");
+            List<String> lines = new ArrayList<>(1);
+            lines.add("&fTime Left: &a" + clock.formatRemaining());
             return lines;
         }
     }
@@ -209,12 +290,11 @@ public final class DuelsScoreboard {
         }
 
         private List<String> buildLines(UUID viewerId) {
-            List<String> lines = new ArrayList<>(3);
+            List<String> lines = new ArrayList<>(2);
             lines.add("&f&lOpponent:");
             Optional<Player> viewerOpt = context.findPlayer(viewerId);
             if (viewerOpt.isEmpty()) {
                 lines.add("&7Unavailable");
-                lines.add("");
                 return lines;
             }
 
@@ -225,7 +305,6 @@ public final class DuelsScoreboard {
             Player opponent = findPrimaryOpponent(viewer, viewerTeamId);
             if (opponent == null) {
                 lines.add("&7Searching...");
-                lines.add("");
                 return lines;
             }
 
@@ -233,7 +312,6 @@ public final class DuelsScoreboard {
             String name = resolveColoredName(opponent);
             String health = formatHealth(opponent);
             lines.add("&7" + arrow + " " + name + " " + health);
-            lines.add("");
             return lines;
         }
 
@@ -316,15 +394,15 @@ public final class DuelsScoreboard {
         }
 
         private List<String> buildLines(DuelsScoreboardLayout layout) {
-            StringBuilder modeLine = new StringBuilder("&f&lMode: &e")
+            StringBuilder modeLine = new StringBuilder("&fMode: &e")
                     .append(layout.familyDisplayName());
             if (!layout.variantDisplayName().isBlank()) {
                 modeLine.append(" &7").append(layout.variantDisplayName());
             }
             return List.of(
                     modeLine.toString(),
-                    "&f&lDaily Streak: &7--",
-                    "&f&lBest Daily Streak: &7--"
+                    "&fDaily Streak: &7--",
+                    "&fBest Daily Streak: &7--"
             );
         }
     }
